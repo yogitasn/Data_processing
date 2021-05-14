@@ -47,7 +47,7 @@ class BlockfaceProcessing:
     This class works on processing the Blockface Datasets
 
     Blockface dataset has information about the station/parking spot such as weekend and weekday rates and timings, parking rate etc.
-    This is used in combination with Seattle Paid Parking Datasets for building analytics 
+    This is used in combination with Seattle Paid Parking Datasets for building analytics
 
     """
 

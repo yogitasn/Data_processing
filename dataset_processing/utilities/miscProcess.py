@@ -6,9 +6,9 @@ from pandas import Series, DataFrame
 
 class GenerateLogs:
     """
-    This custom class generates execution logs in a specific format and saves to a dataframe. 
+    This custom class generates execution logs in a specific format and saves to a dataframe.
     This is useful in tracking and troubleshooting
-    
+
     """
 
     def __init__(self, spark):

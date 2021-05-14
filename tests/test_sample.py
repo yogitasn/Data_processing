@@ -735,6 +735,35 @@ def test_read_occupancy(spark_session):
 
     occupancy.head(4)
 
+
+def test_historic_read_occupancy(spark_session):
+    spark_session.sql("set spark.sql.legacy.timeParserPolicy=LEGACY")
+
+    occ_pr = OccupancyProcessing(spark_session)
+    dataframeconfig = DataframeConfig(spark_session)
+    gen_logs = GenerateLogs(spark_session)
+
+    occ_config_dict = dataframeconfig.json_reader("C:\\Datasetprocessing\\dataset_processing\\data\\occupancy.json")
+
+    occfilePath = dataframeconfig.get_source_driverFilerPath(occ_config_dict)
+
+    # Get Target Table Schema
+    TargetDataframeSchema = dataframeconfig.get_historic_dataframe_schema(occ_config_dict)
+    import glob
+
+    file_names = glob.glob(occfilePath)
+
+    for file in file_names:
+        year = file.split("\\")[3][:4]
+        if year == 2014:
+            (occupancy, source_data_info) = occ_pr.sourceOccupancyReadParquet(
+                occfilePath, TargetDataframeSchema, "MONTH"
+            )
+            occupancy.printSchema()
+            occupancy.head(4)
+            break
+
     # Removing unwanted files
-    os.remove("./tests/._SUCCESS.crc")
-    os.remove("./tests/_SUCCESS")
+    if os.path.isfile("./tests/._SUCCESS.crc") and os.path.isfile("./tests/_SUCCESS"):
+        os.remove("./tests/._SUCCESS.crc")
+        os.remove("./tests/_SUCCESS")
