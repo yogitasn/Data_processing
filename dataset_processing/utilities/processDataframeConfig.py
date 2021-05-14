@@ -11,56 +11,56 @@ SCRIPT_NAME = os.path.basename(__file__)
 
 class DataframeConfig:
     """
-    This custom class generates execution logs in a specific format and saves to a dataframe. This is useful in tracking and troubleshooting
-
+    This custom class process dataframe config from a json file and builds schema, input and output path, target columns etc
 
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, spark):
+        self.spark = spark
 
-    def global_parameters(temp_path):
+    def global_parameters(self, temp_path):
         global g_temp_path
         g_temp_path = temp_path
 
     """ Function to read the json configuration file """
 
-    def json_reader(json_file):
+    def json_reader(self, json_file):
         with open(json_file) as jfile:
             df_dict = json.load(jfile)
         return df_dict
 
     """ Function to get the dataframe long name """
 
-    def dataframe_long_na(df_dict):
+    def dataframe_long_na(self, df_dict):
         return df_dict["dataframeName"]
 
     """ Function to get the dataframe load strategy"""
 
-    def get_dataframe_loadStrategy(df_dict):
+    def get_dataframe_loadStrategy(self, df_dict):
         dataframe_loadStatergy = df_dict["targetDataframeDetails"]["DFLoadStrategy"].upper()
-        GenerateLogs.log_info(SCRIPT_NAME, "Dataframe loadStatergy: {}".format(dataframe_loadStatergy))
-        return table_loadStatergy
+        gen_logs = GenerateLogs(self.spark)
+        gen_logs.log_info(SCRIPT_NAME, "Dataframe loadStatergy: {}".format(dataframe_loadStatergy))
+        return dataframe_loadStatergy
 
     """ Function to get the dataframe load frequency """
 
-    def load_freq(df_dict):
+    def load_freq(self, df_dict):
         load_freq = df_dict["targetDataframeDetails"]["dataframeFrequency"]
         return load_freq
 
     """ Function to get the dataframe partition column """
 
-    def partition_column(df_dict):
+    def partition_column(self, df_dict):
 
         part_col_lcase = df_dict["targetDataframeDetails"]["dataframePartition"]
-
-        GenerateLogs.log_info(SCRIPT_NAME, "Partition Column : {}".format(part_col_lcase))
+        gen_logs = GenerateLogs(self.spark)
+        gen_logs.log_info(SCRIPT_NAME, "Partition Column : {}".format(part_col_lcase))
 
         return part_col_lcase
 
     """ Function to count the number of columns """
 
-    def count_columns(df_dict):
+    def count_columns(self, df_dict):
         count = 0
         for x in df_dict:
             if isinstance(df_dict[x], list):
@@ -71,21 +71,22 @@ class DataframeConfig:
 
     """ Function to build the dataframe column list from the json file"""
 
-    def build_dataframe_column_list(df_dict):
+    def build_dataframe_column_list(self, df_dict):
 
         column_list = []
+        gen_logs = GenerateLogs(self.spark)
 
         column_count = len(df_dict["targetDataframeDetails"]["dataframeColumnInfo"])
 
         for i in range(0, column_count):
             column_list.append(df_dict["targetDataframeDetails"]["dataframeColumnInfo"][i]["columnName"].lower())
 
-        GenerateLogs.log_info(SCRIPT_NAME, "Dataframe Column List: {}".format(column_list))
+        gen_logs.log_info(SCRIPT_NAME, "Dataframe Column List: {}".format(column_list))
         return column_list
 
     """ Function to build the dataframe schema using the input from json file"""
 
-    def get_dataframe_schema(df_dict):
+    def get_dataframe_schema(self, df_dict):
 
         dtypes = {"IntegerType()": IntegerType(), "StringType()": StringType(), "DoubleType()": DoubleType()}
 
@@ -104,33 +105,56 @@ class DataframeConfig:
 
         return cust_schema
 
+    def get_historic_dataframe_schema(self, df_dict):
+
+        dtypes = {"IntegerType()": IntegerType(), "StringType()": StringType(), "DoubleType()": DoubleType()}
+
+        cust_schema = StructType()
+
+        column_count = len(df_dict["sources"]["driverSource"]["historic_fields"])
+
+        print(column_count)
+
+        for i in range(0, column_count):
+            cust_schema.add(
+                df_dict["sources"]["driverSource"]["historic_fields"][i]["name"],
+                dtypes[df_dict["sources"]["driverSource"]["historic_fields"][i]["type"]],
+                True,
+            )
+
+        return cust_schema
+
     """ Function to get the dataframe input path """
 
-    def get_source_driverFilerPath(df_dict):
+    def get_source_driverFilerPath(self, df_dict):
         driverFilePath = df_dict["sources"]["driverSource"]["filePath"]
-        GenerateLogs.log_info(SCRIPT_NAME, "driverFilePath: {}".format(driverFilePath))
+        gen_logs = GenerateLogs(self.spark)
+
+        gen_logs.log_info(SCRIPT_NAME, "driverFilePath: {}".format(driverFilePath))
         return driverFilePath
 
     """ Function to get the dataframe output path """
 
-    def get_source_OutputPath(df_dict):
+    def get_source_OutputPath(self, df_dict):
         outputFilePath = df_dict["sources"]["driverSource"]["OutputPath"]
-        GenerateLogs.log_info(SCRIPT_NAME, "OutputPathFilePath: {}".format(outputFilePath))
+        gen_logs = GenerateLogs(self.spark)
+        gen_logs.log_info(SCRIPT_NAME, "OutputPathFilePath: {}".format(outputFilePath))
         return outputFilePath
 
     """ Function to get the dimension output path """
 
-    def get_source_dateDimOutputPath(df_dict):
+    def get_source_dateDimOutputPath(self, df_dict):
         datedimOutputPath = df_dict["sources"]["driverSource"]["DimOutputPath"]
-        GenerateLogs.log_info(SCRIPT_NAME, "Date Dim OutputPathFilePath: {}".format(datedimOutputPath))
+        gen_logs = GenerateLogs(self.spark)
+        gen_logs.log_info(SCRIPT_NAME, "Date Dim OutputPathFilePath: {}".format(datedimOutputPath))
         return datedimOutputPath
 
-    def main(input_file):
+    def main(self, input_file):
         print(input_file)
-        df_dict = json_reader(input_file)
+        df_dict = self.json_reader(input_file)
         print(df_dict)
-        print(load_freq(df_dict))
+        print(self.load_freq(df_dict))
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    DataframeConfig.main(sys.argv[1])

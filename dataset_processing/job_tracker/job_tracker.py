@@ -9,14 +9,17 @@ from pathlib import Path
 
 
 class JobTracker:
-    def create_job_table():
+    def __init__(self):
+        pass
+
+    def create_job_table(self):
         """insert a new vendor into the vendors table"""
         sql = """CREATE TABLE spark_job (job_id INT NOT NULL, job_name VARCHAR(50),\
                 status VARCHAR(50), dataset VARCHAR(50), loadtype VARCHAR(50), step INT,\
                 stepdesc VARCHAR(50), year_processed VARCHAR(10),\date DATE NOT NULL)"""
 
         try:
-            conn = get_db_connection()
+            conn = self.get_db_connection()
             # create a new cursor
             cur = conn.cursor()
             # execute the CREATE statement
@@ -33,14 +36,14 @@ class JobTracker:
 
     """ Insert the job detail records in the control table """
 
-    def insert_job_details(job_id, job_name, status, dataset, loadtype, step, stepdesc, year_processed, date):
+    def insert_job_details(self, job_id, job_name, status, dataset, loadtype, step, stepdesc, year_processed, date):
         """insert job details into the table"""
         sql = """insert into spark_job (job_id, job_name, status, dataset, loadtype, step, stepdesc,year_processed, date)
                 values (%s,%s,%s,%s,%s,%s,%s,%s,%s);"""
         conn = None
         vendor_id = None
         try:
-            conn = get_db_connection()
+            conn = self.get_db_connection()
             # create a new cursor
             cur = conn.cursor()
             # execute the INSERT statement
@@ -53,18 +56,18 @@ class JobTracker:
             if conn is not None:
                 conn.close()
 
-    def assign_job_id():
+    def assign_job_id(self):
 
         job_id = random.randint(1, 10)
         return job_id
 
     """ Get the job status """
 
-    def get_job_status(job_id):
+    def get_job_status(self, job_id):
         # connect db and send sql query
         table_name = "spark_job"
         sql = """SELECT spark_job.status FROM spark_job where spark_job.job_id= %s ;"""
-        conn = get_db_connection()
+        conn = self.get_db_connection()
         cursor = conn.cursor()
         try:
             print(" Fetching status of the job from the table")
@@ -77,11 +80,11 @@ class JobTracker:
 
     """ Get the job status of the historic data processing """
 
-    def get_historic_job_status(year):
+    def get_historic_job_status(self, year):
         # connect db and send sql query
         table_name = "spark_job"
         sql = """SELECT spark_job.status FROM spark_job where spark_job.year_processed= %s ;"""
-        conn = get_db_connection()
+        conn = self.get_db_connection()
         cursor = conn.cursor()
         try:
             print(" Fetching status of the job from the table")
@@ -99,7 +102,7 @@ class JobTracker:
 
     """ Function to connect to POSTGRES database """
 
-    def get_db_connection():
+    def get_db_connection(self):
         connection = None
 
         # Construct connection string

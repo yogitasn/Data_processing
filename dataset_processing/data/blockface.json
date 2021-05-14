@@ -220,14 +220,14 @@
           "metadata": {},
           "name": "rpz_zone",
           "nullable": true,
-          "type": "StringType()"
+          "type": "IntegerType()"
         },
 
         {
           "metadata": {},
           "name": "rpz_area",
           "nullable": true,
-          "type": "DoubleType()"
+          "type": "StringType()"
         },
 
         {
@@ -241,7 +241,7 @@
           "metadata": {},
           "name": "parking_time_limit",
           "nullable": true,
-          "type": "DoubleType()"
+          "type": "IntegerType()"
         },
 
         {
@@ -301,7 +301,7 @@
           "metadata": {},
           "name": "overridecomment",
           "nullable": true,
-          "type": "IntegerType()"
+          "type": "StringType()"
         },
         {
           "metadata": {},

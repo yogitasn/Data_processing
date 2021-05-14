@@ -21,12 +21,12 @@ import configparser
 import time
 from datetime import datetime
 from pathlib import Path
-from occupancy_processing import miscProcess
-from occupancy_processing import processDataframeConfig
-from occupancy_processing import executeBlockface
-from occupancy_processing import readEnvironmentParameters
-from occupancy_processing import executeOccupancyProcess
-from occupancy_processing import job_tracker
+from dataset_processing.utilities.miscProcess import GenerateLogs
+from dataset_processing.utilities.processDataframeConfig import DataframeConfig
+from dataset_processing.blockface_processing.executeBlockface import BlockfaceProcessing
+from dataset_processing.utilities.readEnvironmentParameters import ReadEnvironmentParameters
+from dataset_processing.occupancy_processing.executeOccupancyProcess import OccupancyProcessing
+from dataset_processing.job_tracker.job_tracker import JobTracker
 import sys
 import os
 import glob
@@ -37,18 +37,6 @@ path = str(Path(Path(__file__).parent.absolute()).parent.absolute())
 logging.info(path)
 
 SCRIPT_NAME = os.path.basename(__file__)
-
-try:
-    sys.path.insert(1, path + "/dataset_processing/blockface_processing")  # the type of path is string
-    sys.path.insert(2, path + "/dataset_processing/data")
-    sys.path.insert(3, path + "/dataset_processing/job_tracker")
-    sys.path.insert(4, path + "/dataset_processing/utilities")
-    # /databricks/python/lib/python3.7/site-packages/Pipelineorchestration/
-
-except (ModuleNotFoundError, ImportError) as e:
-    print("{} fileure".format(type(e)))
-else:
-    print("Import succeeded")
 
 
 def create_sparksession():
@@ -93,7 +81,7 @@ print(" Job ID created {}".format(job_id))
 
 
 def update_control_table(job_id, JOBNAME, status, dataset, loadtype, step, stepdesc, year_processed, date):
-    job_tracker.insert_job_details(job_id, JOBNAME, status, dataset, loadtype, step, stepdesc, year_processed, date)
+    JobTracker.insert_job_details(job_id, JOBNAME, status, dataset, loadtype, step, stepdesc, year_processed, date)
 
 
 # =========================================================================================================
@@ -103,17 +91,17 @@ def update_control_table(job_id, JOBNAME, status, dataset, loadtype, step, stepd
 spark = create_sparksession()
 
 # Make the SQLContext Session available to sub-scripts
-executeBlockface.global_SQLContext(spark)
-executeOccupancyProcess.global_SQLContext(spark)
-readEnvironmentParameters.global_SQLContext(spark)
-miscProcess.global_SQLContext(spark)
+BlockfaceProcessing.global_SQLContext(spark)
+OccupancyProcessing.global_SQLContext(spark)
+# ReadEnvironmentParameters.global_SQLContext(spark)
+GenerateLogs.global_SQLContext(spark)
 
 
 # =========================================================================================================
 # ================ Initialize log Filename =============================================================
 # =========================================================================================================
 
-miscProcess.initial_log_file(LogFileName)
+GenerateLogs.initial_log_file(LogFileName)
 
 
 # =========================================================================================================
@@ -121,7 +109,7 @@ miscProcess.initial_log_file(LogFileName)
 STEP, STEP_DESC = (10, "Read Job Specific Parameter Files")
 # =========================================================================================================
 
-miscProcess.log_step(SCRIPT_NAME, "PERFORMING STEP {}:{} ".format(STEP, STEP_DESC))
+GenerateLogs.log_step(SCRIPT_NAME, "PERFORMING STEP {}:{} ".format(STEP, STEP_DESC))
 
 if SparkSubmitClientMode == "Y":
     # Spark Submitted in Client Mode
@@ -131,20 +119,20 @@ if SparkSubmitClientMode == "Y":
 else:
     # Spark Submitted in Cluster Mode
     job_control_file = "./" + JOBNAME + ".cfg"
-    blockface_config_filename = "./common/" + BlockfaceDataframeName.lower() + ".json"
-    occupancy_config_filename = "./common/" + OccupancyDataframeName.lower() + ".json"
+    blockface_config_filename = "../data/" + BlockfaceDataframeName.lower() + ".json"
+    occupancy_config_filename = "../data/" + OccupancyDataframeName.lower() + ".json"
 
 
 if os.path.isfile(job_control_file):
-    miscProcess.log_info(SCRIPT_NAME, "Job control filename: {} exist".format(job_control_file))
-    paramFile, ReturnCode = readEnvironmentParameters.read_job_control(job_control_file)
+    GenerateLogs.log_info(SCRIPT_NAME, "Job control filename: {} exist".format(job_control_file))
+    paramFile, ReturnCode = ReadEnvironmentParameters.read_job_control(job_control_file)
 
     if ReturnCode != 0:
-        miscProcess.log_error(SCRIPT_NAME, "Error : Reading Job Control file {} ".format(job_control_file), ReturnCode)
+        GenerateLogs.log_error(SCRIPT_NAME, "Error : Reading Job Control file {} ".format(job_control_file), ReturnCode)
         exit(STEP)
     globals().update(paramFile)
 else:
-    miscProcess.log_error(SCRIPT_NAME, "Job control filename: {} doesn't exist ".format(job_control_file), STEP)
+    GenerateLogs.log_error(SCRIPT_NAME, "Job control filename: {} doesn't exist ".format(job_control_file), STEP)
     exit(STEP)
 
 
@@ -152,16 +140,16 @@ else:
 (STEP, STEP_DESC) = (20, "Validate All Needed Parameters defined from the control files")
 # ===============================================================================================================#
 # ALWAYS PERFORM THIS STEP
-miscProcess.log_step(SCRIPT_NAME, "PERFORMING STEP: {}: {}".format(STEP, STEP_DESC))
+GenerateLogs.log_step(SCRIPT_NAME, "PERFORMING STEP: {}: {}".format(STEP, STEP_DESC))
 
 
 if "RerunId" not in globals():
-    miscProcess.log_error(
+    GenerateLogs.log_error(
         SCRIPT_NAME, "ERROR: Parameter RerunId is not defined on control file: {}".format(JOBNAME + ".cfg"), STEP
     )
     exit(STEP)
 
-miscProcess.log_print("OutputPath: {}".format(OutputPath))
+GenerateLogs.log_print("OutputPath: {}".format(OutputPath))
 
 if "ErrorRetryCount" not in globals():
     ErrorRetryCount = 1
@@ -186,7 +174,7 @@ print(recent_years)
 if StartStep.isnumeric():
     StartStep = int(StartStep)
 else:
-    miscProcess.log_error(
+    GenerateLogs.log_error(
         SCRIPT_NAME,
         "ERROR: Parameter StartStep: {} is not numerics value, check file: {}".format(StartStep, job_control_file),
         STEP,
@@ -197,7 +185,7 @@ else:
 if StopStep.isnumeric():
     StopStep = int(StopStep)
 else:
-    miscProcess.log_error(
+    GenerateLogs.log_error(
         SCRIPT_NAME,
         "ERROR: Parameter StepStep: {} is not numerics value, check file: {}".format(StopStep, job_control_file),
         STEP,
@@ -207,7 +195,7 @@ else:
 if max_retry_count.isnumeric():
     max_retry_count = int(max_retry_count)
 else:
-    miscProcess.log_error(
+    GenerateLogs.log_error(
         SCRIPT_NAME,
         "ERROR: Parameter max_retry_delay: {} is not numerics value, check file: {}".format(
             max_retry_count, job_control_file
@@ -219,7 +207,7 @@ else:
 if retry_delay.isnumeric():
     retry_delay = int(retry_delay)
 else:
-    miscProcess.log_error(
+    GenerateLogs.log_error(
         SCRIPT_NAME,
         "ERROR: Parameter retry_delay: {} is not numerics value, check file: {}".format(retry_delay, job_control_file),
         STEP,
@@ -232,46 +220,46 @@ else:
 # ==============================================================================================================#
 # ALWAYS PERFORM THIS STEP
 
-miscProcess.log_step(SCRIPT_NAME, "PERFORMING STEP {}:{} ".format(STEP, STEP_DESC))
+GenerateLogs.log_step(SCRIPT_NAME, "PERFORMING STEP {}:{} ".format(STEP, STEP_DESC))
 
 # Flag to track historic occupancy execution from 2012-2017
 isHistoric = True
 
 for y in historic_years:
-    status = job_tracker.get_historic_job_status(y)
+    status = JobTracker.get_historic_job_status(y)
     print("{} for year:{}".format(status, y))
     if status == "Failed" or status == "No entry":
-        miscProcess.log_info(SCRIPT_NAME, "Historical data for the year {}  needs to be re processed ".format(y))
+        GenerateLogs.log_info(SCRIPT_NAME, "Historical data for the year {}  needs to be re processed ".format(y))
         isHistoric = False
 
 # Flag to track historic occupancy execution from 2018 to currentyear-1
 isHistoric1 = True
 
 for y in recent_years:
-    status = job_tracker.get_historic_job_status(y)
+    status = JobTracker.get_historic_job_status(y)
     print("{} for year:{}".format(status, y))
     if status == "Failed" or status == "No entry":
-        miscProcess.log_info(SCRIPT_NAME, "Historical data for the year {}  needs to be re processed ".format(y))
+        GenerateLogs.log_info(SCRIPT_NAME, "Historical data for the year {}  needs to be re processed ".format(y))
         isHistoric1 = False
 
 
 # ==============================================================================================================#
 (STEP, STEP_DESC) = (40, "Processing Blockface Dataframe configuration file")
 # ===============================================================================================================#
-miscProcess.log_step(SCRIPT_NAME, "PERFORMING STEP {}:{} ".format(STEP, STEP_DESC))
+GenerateLogs.log_step(SCRIPT_NAME, "PERFORMING STEP {}:{} ".format(STEP, STEP_DESC))
 today = datetime.now()
 current_year = today.year
 
 
 if StartStep <= STEP and StopStep >= STEP:
-    miscProcess.log_step(SCRIPT_NAME, "PERFORMING STEP {}: {} ".format(STEP, STEP_DESC))
+    GenerateLogs.log_step(SCRIPT_NAME, "PERFORMING STEP {}: {} ".format(STEP, STEP_DESC))
     if os.path.isfile(blockface_config_filename):
-        miscProcess.log_info(
+        GenerateLogs.log_info(
             SCRIPT_NAME, "Blockface Dataframe Configuration filename: {} exists ".format(blockface_config_filename)
         )
-        blockface_config_dict = processDataframeConfig.json_reader(blockface_config_filename)
+        blockface_config_dict = DataframeConfig.json_reader(blockface_config_filename)
     else:
-        miscProcess.log_error(
+        GenerateLogs.log_error(
             SCRIPT_NAME,
             "ERROR: Dataframe Configuration file: {} does not exist ".format(blockface_config_filename),
             STEP,
@@ -280,22 +268,22 @@ if StartStep <= STEP and StopStep >= STEP:
 
 
 # Get Dataframe Column List
-cols_list = processDataframeConfig.build_dataframe_column_list(blockface_config_dict)
+cols_list = DataframeConfig.build_dataframe_column_list(blockface_config_dict)
 
 # Get Blockface file path
-blockfacefilePath = processDataframeConfig.get_source_driverFilerPath(blockface_config_dict)
+blockfacefilePath = DataframeConfig.get_source_driverFilerPath(blockface_config_dict)
 
 # Get Target Dataframe Schema
-TargetDataframeSchema = processDataframeConfig.get_dataframe_schema(blockface_config_dict)
+TargetDataframeSchema = DataframeConfig.get_dataframe_schema(blockface_config_dict)
 
 # Get Output file path to save processed data
-OutputPath = processDataframeConfig.get_source_OutputPath(blockface_config_dict)
+OutputPath = DataframeConfig.get_source_OutputPath(blockface_config_dict)
 
 
 if os.path.isdir(OutputPath):
-    miscProcess.log_info(SCRIPT_NAME, " Output directory {} exists ".format(OutputPath))
+    GenerateLogs.log_info(SCRIPT_NAME, " Output directory {} exists ".format(OutputPath))
 else:
-    miscProcess.log_error(SCRIPT_NAME, "ERROR: Output directory: {} does not exist ".format(OutputPath), STEP)
+    GenerateLogs.log_error(SCRIPT_NAME, "ERROR: Output directory: {} does not exist ".format(OutputPath), STEP)
     exit(STEP)
 
 update_control_table(
@@ -314,13 +302,13 @@ update_control_table(
 # =================================================================
 (STEP, STEP_DESC) = (50, "Create Dataframe, Build and Execute Blockface Transformation Process")
 # ==================================================================
-miscProcess.log_step(SCRIPT_NAME, "PERFORMING STEP {}:{} ".format(STEP, STEP_DESC))
+GenerateLogs.log_step(SCRIPT_NAME, "PERFORMING STEP {}:{} ".format(STEP, STEP_DESC))
 
 
 if StartStep <= STEP and StopStep >= STEP:
     current_time = datetime.now()
     LoadStartTs = current_time.strftime("%Y-%m-%d %H:%M:%S.%f")
-    miscProcess.log_print("LoadStartTs: {}".format(LoadStartTs))
+    GenerateLogs.log_print("LoadStartTs: {}".format(LoadStartTs))
 
     # =================================================================
     # == Create Blockface Dataframe from the sources
@@ -328,25 +316,25 @@ if StartStep <= STEP and StopStep >= STEP:
 
     (src_df, source_data_info_array) = (None, None)
     try:
-        (src_df, source_data_info_array) = executeBlockface.sourceBlockfaceReadParquet(
+        (src_df, source_data_info_array) = BlockfaceProcessing.sourceBlockfaceReadParquet(
             blockfacefilePath, TargetDataframeSchema
         )
 
         print("Blocface dataframe read")
 
     except Exception as e:
-        miscProcess.log_error(SCRIPT_NAME, "Source Error: {}".format(e), STEP)
+        GenerateLogs.log_error(SCRIPT_NAME, "Source Error: {}".format(e), STEP)
         exit(STEP)
 
     # =================================================================
     # == Create Blockface Transformations on Dataframe
     # ==================================================================
-    (ReturnCode, rec_cnt) = executeBlockface.executeBlockfaceOperations(
+    (ReturnCode, rec_cnt) = BlockfaceProcessing.BlockfaceProcessingOperations(
         src_df, OutputPath, cols_list, max_retry_count, retry_delay
     )
 
     if ReturnCode != 0:
-        miscProcess.log_error(SCRIPT_NAME, "Error Processing Transformation Failed ", STEP)
+        GenerateLogs.log_error(SCRIPT_NAME, "Error Processing Transformation Failed ", STEP)
         update_control_table(
             job_id=job_id,
             JOBNAME=JOBNAME,
@@ -379,15 +367,15 @@ if StartStep <= STEP and StopStep >= STEP:
 
 
 if StartStep <= STEP and StopStep >= STEP:
-    miscProcess.log_step(SCRIPT_NAME, "PERFORMING STEP {}: {} ".format(STEP, STEP_DESC))
+    GenerateLogs.log_step(SCRIPT_NAME, "PERFORMING STEP {}: {} ".format(STEP, STEP_DESC))
 
     if os.path.isfile(occupancy_config_filename):
-        miscProcess.log_info(
+        GenerateLogs.log_info(
             SCRIPT_NAME, "Occupancy Configuration filename: {} exists ".format(occupancy_config_filename)
         )
-        occupancy_config_dict = processDataframeConfig.json_reader(occupancy_config_filename)
+        occupancy_config_dict = DataframeConfig.json_reader(occupancy_config_filename)
     else:
-        miscProcess.log_error(
+        GenerateLogs.log_error(
             SCRIPT_NAME,
             "ERROR: Occupancy Configuration file: {} does not exist ".format(occupancy_config_filename),
             STEP,
@@ -395,33 +383,36 @@ if StartStep <= STEP and StopStep >= STEP:
         exit(STEP)
 
     # Get Dataframe Column List
-    OccpnColumnList = processDataframeConfig.build_dataframe_column_list(occupancy_config_dict)
+    OccpnColumnList = DataframeConfig.build_dataframe_column_list(occupancy_config_dict)
 
     # Get Column Partition
-    PartitionColumn = processDataframeConfig.partition_column(occupancy_config_dict)
+    PartitionColumn = DataframeConfig.partition_column(occupancy_config_dict)
 
     # Get Target Dataframe Schema
-    TargetOccpDFSchema = processDataframeConfig.get_dataframe_schema(occupancy_config_dict)
+    TargetOccpDFSchema = DataframeConfig.get_dataframe_schema(occupancy_config_dict)
+
+    # Get Target Historic Dataframe Schema
+    TargetHistOccpDFSchema = DataframeConfig.get_historic_dataframe_schema(occupancy_config_dict)
 
     # Get Occupancy dataset File path
-    occupancyFilePath = processDataframeConfig.get_source_driverFilerPath(occupancy_config_dict)
+    occupancyFilePath = DataframeConfig.get_source_driverFilerPath(occupancy_config_dict)
 
     # Get the Occupany processed output path
-    OutputPath = processDataframeConfig.get_source_OutputPath(occupancy_config_dict)
+    OutputPath = DataframeConfig.get_source_OutputPath(occupancy_config_dict)
 
     # Get the Dimension processed output path
-    datedimOutputPath = processDataframeConfig.get_source_dateDimOutputPath(occupancy_config_dict)
+    datedimOutputPath = DataframeConfig.get_source_dateDimOutputPath(occupancy_config_dict)
 
 # =================================================================
 (STEP, STEP_DESC) = (70, "Create Dataframe, Build and Execute Occupancy Process")
 # ==================================================================
-miscProcess.log_step(SCRIPT_NAME, "PERFORMING STEP {}:{} ".format(STEP, STEP_DESC))
+GenerateLogs.log_step(SCRIPT_NAME, "PERFORMING STEP {}:{} ".format(STEP, STEP_DESC))
 
 
 if StartStep <= STEP and StopStep >= STEP:
     current_time = datetime.now()
     LoadStartTs = current_time.strftime("%Y-%m-%d %H:%M:%S.%f")
-    miscProcess.log_print("LoadStartTs: {}".format(LoadStartTs))
+    GenerateLogs.log_print("LoadStartTs: {}".format(LoadStartTs))
 
     file_names = glob.glob(occupancyFilePath)
 
@@ -441,23 +432,23 @@ if StartStep <= STEP and StopStep >= STEP:
             # ==================================================================
 
             try:
-                (src_df, source_data_info_array) = executeOccupancyProcess.sourceOccupancyReadParquet(
-                    occupancyFilePath, TargetOccpDFSchema, PartitionColumn
+                (src_df, source_data_info_array) = OccupancyProcessing.sourceOccupancyReadParquet(
+                    occupancyFilePath, TargetHistOccpDFSchema, PartitionColumn
                 )
 
             except Exception as e:
-                miscProcess.log_error(SCRIPT_NAME, "Source Error: {}".format(e), STEP)
+                GenerateLogs.log_error(SCRIPT_NAME, "Source Error: {}".format(e), STEP)
                 exit(STEP)
 
             # =================================================================
             # == Create Occupancy Historical Transformations on Dataframe
             # ==================================================================
-            (ReturnCode, rec_cnt) = executeOccupancyProcess.executeHistoricOccupancyOperations(
+            (ReturnCode, rec_cnt) = OccupancyProcessing.executeHistoricOccupancyOperations(
                 src_df, OutputPath, OccpnColumnList, PartitionColumn, max_retry_count, retry_delay, TargetOccpDFSchema
             )
 
             if ReturnCode != 0:
-                miscProcess.log_error(SCRIPT_NAME, "Error Processing Transformation Failed ", STEP)
+                GenerateLogs.log_error(SCRIPT_NAME, "Error Processing Transformation Failed ", STEP)
                 update_control_table(
                     job_id=job_id,
                     JOBNAME=JOBNAME,
@@ -494,12 +485,12 @@ if StartStep <= STEP and StopStep >= STEP:
             (src_df, source_data_info_array) = (None, None)
 
             try:
-                (src_df, source_data_info_array) = executeOccupancyProcess.sourceOccupancyReadParquet(
+                (src_df, source_data_info_array) = OccupancyProcessing.sourceOccupancyReadParquet(
                     occupancyFilePath, TargetOccpDFSchema, PartitionColumn
                 )
 
             except Exception as e:
-                miscProcess.log_error(SCRIPT_NAME, "Source Error: {}".format(e), STEP)
+                GenerateLogs.log_error(SCRIPT_NAME, "Source Error: {}".format(e), STEP)
                 exit(STEP)
 
             src_df.show(3)
@@ -507,12 +498,12 @@ if StartStep <= STEP and StopStep >= STEP:
             # == Create Occupancy Historical Transformations on Dataframe
             # ==================================================================
 
-            (ReturnCode, rec_cnt) = executeOccupancyProcess.executeOccupancyOperations(
+            (ReturnCode, rec_cnt) = OccupancyProcessing.executeOccupancyOperations(
                 src_df, OutputPath, datedimOutputPath, OccpnColumnList, PartitionColumn, max_retry_count, retry_delay
             )
 
             if ReturnCode != 0:
-                miscProcess.log_error(SCRIPT_NAME, "Error Processing Transformation Failed ", STEP)
+                GenerateLogs.log_error(SCRIPT_NAME, "Error Processing Transformation Failed ", STEP)
                 update_control_table(
                     job_id=job_id,
                     JOBNAME=JOBNAME,
@@ -546,24 +537,24 @@ if StartStep <= STEP and StopStep >= STEP:
             (src_df, source_data_info_array) = (None, None)
 
             try:
-                (src_df, source_data_info_array) = executeOccupancyProcess.sourceOccupancyReadParquet(
+                (src_df, source_data_info_array) = OccupancyProcessing.sourceOccupancyReadParquet(
                     occupancyFilePath, TargetOccpDFSchema, PartitionColumn
                 )
 
             except Exception as e:
-                miscProcess.log_error(SCRIPT_NAME, "Source Error: {}".format(e), STEP)
+                GenerateLogs.log_error(SCRIPT_NAME, "Source Error: {}".format(e), STEP)
                 exit(STEP)
 
             # =================================================================
             # == Create Occupancy Delta Transformations on Dataframe
             # ==================================================================
 
-            (ReturnCode, rec_cnt) = executeOccupancyProcess.executeOccupancyOperations(
+            (ReturnCode, rec_cnt) = OccupancyProcessing.executeOccupancyOperations(
                 src_df, OutputPath, datedimOutputPath, OccpnColumnList, PartitionColumn, max_retry_count, retry_delay
             )
 
             if ReturnCode != 0:
-                miscProcess.log_error(SCRIPT_NAME, "Error Processing Transformation Failed ", STEP)
+                GenerateLogs.log_error(SCRIPT_NAME, "Error Processing Transformation Failed ", STEP)
                 update_control_table(
                     job_id=job_id,
                     JOBNAME=JOBNAME,
@@ -589,4 +580,4 @@ if StartStep <= STEP and StopStep >= STEP:
                 date=datetime.today(),
             )
 
-    miscProcess.complete_log_file()
+    GenerateLogs.complete_log_file()

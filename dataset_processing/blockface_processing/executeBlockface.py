@@ -44,17 +44,16 @@ SCRIPT_NAME = os.path.basename(__file__)
 
 class BlockfaceProcessing:
     """
-    This class works on trade and quote tables populated with daily records extracted the previous etl_load step,
-    and focuses on using SparkSQL and Python to build an ETL job that calculates the following results for a given day:
-    - Latest trade price before the quote.
-    - Latest 30-minute moving average trade price, before the quote.
-    - The bid/ask price movement from previous day’s closing price
+    This class works on processing the Blockface Datasets
 
+    Blockface dataset has information about the station/parking spot such as weekend and weekday rates and timings, parking rate etc.
+    This is used in combination with Seattle Paid Parking Datasets for building analytics 
 
     """
 
     def __init__(self, spark):
         self.spark = spark
+        self.format_minstoHHMMSS = F.udf(BlockfaceProcessing.format_minstoHHMMSS, StringType())
 
     def global_SQLContext(self, spark1):
         global spark
@@ -68,13 +67,14 @@ class BlockfaceProcessing:
     def get_currentDate(self):
         current_time = datetime.now()
         str_current_time = current_time.strftime("%Y-%m-%d")
-        GenerateLogs.log_print(str_current_time)
+        # GenerateLogs.log_print(str_current_time)
 
     def regex_replace_values(self):
         regexp_replace
 
-    @udf(StringType())
-    def format_minstoHHMMSS(self, x):
+    # @udf(StringType())
+    @staticmethod
+    def format_minstoHHMMSS(x):
         """
         Function to convert the minutes to HH:MM:SS format
         """
@@ -90,8 +90,8 @@ class BlockfaceProcessing:
     """ Function to read blockface csv file using file path and schema """
 
     def sourceBlockfaceReadParquet(self, blockfacefilePath, cust_schema):
-
-        GenerateLogs.log_info(SCRIPT_NAME, "Reading CSV file...")
+        gen_logs = GenerateLogs(self.spark)
+        gen_logs.log_info(SCRIPT_NAME, "Reading CSV file...")
         print("Reading CSV file")
 
         source_data_info = {}
@@ -101,7 +101,7 @@ class BlockfaceProcessing:
             blockface = self.spark.read.format("csv").option("header", True).schema(cust_schema).load(blockfacefilePath)
 
         except Exception as e:
-            GenerateLogs.log_info(SCRIPT_NAME, "error in reading csv: {}".format(e))
+            gen_logs.log_info(SCRIPT_NAME, "error in reading csv: {}".format(e))
 
         source_data_info["blockfacefilePath"] = blockfacefilePath
 
@@ -110,10 +110,11 @@ class BlockfaceProcessing:
     """ Function to perform transformations on the dataset """
 
     def executeBlockfaceOperations(self, src_df, output, cols_list, max_retry_count, retry_delay):
+        gen_logs = GenerateLogs(self.spark)
 
-        miscProcess.log_print("Starting the Blockface Execute Operations")
+        gen_logs.log_info("Starting the Blockface Execute Operations")
 
-        src_df.printSchema()
+        # src_df.printSchema()
 
         ReturnCode = 0
         rec_cnt = 0
@@ -130,31 +131,31 @@ class BlockfaceProcessing:
                 Success = False
                 RetryCt += 1
                 if RetryCt == max_retry_count:
-                    miscProcess.log_info(
+                    gen_logs.log_info(
                         SCRIPT_NAME, "Failed on reading input file after {} tries: {}".format(max_retry_count)
                     )
                     ReturnCode = 1
                     return ReturnCode, rec_cnt
 
                 else:
-                    miscProcess.log_info(
+                    gen_logs.log_info(
                         SCRIPT_NAME, "Failed on reading input file, re-try in {} seconds ".format(retry_delay)
                     )
 
         select_df = input_df.select([colname for colname in input_df.columns if colname in (cols_list)])
 
         select_df = (
-            select_df.withColumn("wkd_start1", format_minstoHHMMSS("wkd_start1"))
-            .withColumn("wkd_end1", format_minstoHHMMSS("wkd_end1"))
-            .withColumn("wkd_start2", format_minstoHHMMSS("wkd_start2"))
-            .withColumn("wkd_end2", format_minstoHHMMSS("wkd_end2"))
-            .withColumn("wkd_end3", format_minstoHHMMSS("wkd_end3"))
-            .withColumn("sat_start1", format_minstoHHMMSS("sat_start1"))
-            .withColumn("sat_end1", format_minstoHHMMSS("sat_end1"))
-            .withColumn("sat_start2", format_minstoHHMMSS("sat_start2"))
-            .withColumn("sat_end2", format_minstoHHMMSS("sat_end2"))
-            .withColumn("sat_start3", format_minstoHHMMSS("sat_start3"))
-            .withColumn("sat_end3", format_minstoHHMMSS("sat_end3"))
+            select_df.withColumn("wkd_start1", self.format_minstoHHMMSS(F.col("wkd_start1")))
+            .withColumn("wkd_end1", self.format_minstoHHMMSS(F.col("wkd_end1")))
+            .withColumn("wkd_start2", self.format_minstoHHMMSS(F.col("wkd_start2")))
+            .withColumn("wkd_end2", self.format_minstoHHMMSS(F.col("wkd_end2")))
+            .withColumn("wkd_end3", self.format_minstoHHMMSS(F.col("wkd_end3")))
+            .withColumn("sat_start1", self.format_minstoHHMMSS(F.col("sat_start1")))
+            .withColumn("sat_end1", self.format_minstoHHMMSS(F.col("sat_end1")))
+            .withColumn("sat_start2", self.format_minstoHHMMSS(F.col("sat_start2")))
+            .withColumn("sat_end2", self.format_minstoHHMMSS(F.col("sat_end2")))
+            .withColumn("sat_start3", self.format_minstoHHMMSS(F.col("sat_start3")))
+            .withColumn("sat_end3", self.format_minstoHHMMSS(F.col("sat_end3")))
         )
 
         # miscProcess.log_print("Writing to output file: {}".format(output))
@@ -167,7 +168,7 @@ class BlockfaceProcessing:
         while (RetryCt < max_retry_count) and not Success:
             try:
                 Success = True
-                miscProcess.log_info(SCRIPT_NAME, "Writing to Parquet file")
+                gen_logs.log_info(SCRIPT_NAME, "Writing to Parquet file")
                 select_df.show(3)
                 print("Output file {}".format(output))
                 select_df.coalesce(1).write.mode("overwrite").parquet(output + "//Blockface.parquet")
@@ -175,18 +176,16 @@ class BlockfaceProcessing:
                 Success = False
                 RetryCt += 1
                 if RetryCt == max_retry_count:
-                    miscProcess.log_info(
+                    gen_logs.log_info(
                         SCRIPT_NAME, "Failed on writing File after {} tries: {} ".format(max_retry_count, output)
                     )
                     ReturnCode = 2
                     return ReturnCode, rec_cnt
                 else:
-                    miscProcess.log_info(
-                        SCRIPT_NAME, "Failed on writing File, re-try in {} seconds ".format(retry_delay)
-                    )
+                    gen_logs.log_info(SCRIPT_NAME, "Failed on writing File, re-try in {} seconds ".format(retry_delay))
                     time.sleep(retry_delay)
 
-        GenerateLogs.log_print("Number of Records Processed: {}".format(rec_cnt))
+        gen_logs.log_print("Number of Records Processed: {}".format(rec_cnt))
 
         return ReturnCode, rec_cnt
 
@@ -198,6 +197,6 @@ class BlockfaceProcessing:
 #   if __name__ == "__main__":
 
 #        logfile = "test_123.log"
-#       miscProcess.initial_log_file(logfile)
-# miscProcess.complete_log_file(logfile)
+#       gen_logs.initial_log_file(logfile)
+# gen_logs.complete_log_file(logfile)
 #      main()

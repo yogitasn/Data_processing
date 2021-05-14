@@ -13,12 +13,11 @@ import re
 import os
 import re
 import time
+import shutil
 
 from dataset_processing.utilities.miscProcess import GenerateLogs
 
 SCRIPT_NAME = os.path.basename(__file__)
-
-""" Set the Spark """
 
 
 class OccupancyProcessing:
@@ -41,7 +40,8 @@ class OccupancyProcessing:
     def get_currentDate(self):
         current_time = datetime.now()
         str_current_time = current_time.strftime("%Y-%m-%d")
-        GenerateLogs.log_print(str_current_time)
+        gen_logs = GenerateLogs(self.spark)
+        gen_logs.log_print(str_current_time)
 
     def regex_replace_values():
         regexp_replace
@@ -69,8 +69,8 @@ class OccupancyProcessing:
     """ Read Parquet function - input file path, schema and partition name """
 
     def sourceOccupancyReadParquet(self, occupancyFilePath, custom_schema, partition_value):
-
-        GenerateLogs.log_info(SCRIPT_NAME, "Reading Occupancy CSV file...")
+        gen_logs = GenerateLogs(self.spark)
+        gen_logs.log_info(SCRIPT_NAME, "Reading Occupancy CSV file...")
         print("Reading Occupancy CSV file")
 
         source_data_info = {}
@@ -85,7 +85,7 @@ class OccupancyProcessing:
             )
 
         except Exception as e:
-            GenerateLogs.log_info(SCRIPT_NAME, "error in reading csv: {}".format(e))
+            gen_logs.log_info(SCRIPT_NAME, "error in reading csv: {}".format(e))
 
         source_data_info["occupancyFilePath"] = occupancyFilePath
         source_data_info["partition"] = str(partition_value)
@@ -96,38 +96,40 @@ class OccupancyProcessing:
 
     """ Function to create a dataframe used in a broadcast while joining two dataframes """
 
-    def createStationIDDF(self, cust_schema):
+    def createStationIDDF(self, path_of_year_tob_processed, cust_schema):
 
-        occ_df_2020 = (
-            self.spark.read.format("csv")
-            .option("header", True)
-            .schema(cust_schema)
-            .load("C:\\Test\\PaidParking\\2020_Paid_Parking.csv")
+        station_id_df = (
+            self.spark.read.format("csv").option("header", True).schema(cust_schema).load(path_of_year_tob_processed)
         )
 
-        occ_df_2020 = occ_df_2020.withColumn("station_id", self.remove_non_word_characters(F.col("station_id")))
+        station_id_df = station_id_df.withColumn("station_id", F.col("sourceelementkey"))
+        station_id_df = station_id_df.drop("sourceelementkey")
 
-        occ_df_2020 = occ_df_2020.withColumn("longitude", F.split("location", " ").getItem(1)).withColumn(
+        station_id_df = station_id_df.withColumn("station_id", self.remove_non_word_characters(F.col("station_id")))
+
+        station_id_df = station_id_df.withColumn("longitude", F.split("location", " ").getItem(1)).withColumn(
             "latitude", F.split("location", " ").getItem(2)
         )
 
-        occ_df_2020 = occ_df_2020.withColumn("latitude", self.remove__parenthesis(F.col("latitude"))).withColumn(
-            "longitude", remove__parenthesis(F.col("longitude"))
+        station_id_df = station_id_df.withColumn("latitude", self.remove__parenthesis(F.col("latitude"))).withColumn(
+            "longitude", self.remove__parenthesis(F.col("longitude"))
         )
 
-        occ_df_2020 = occ_df_2020.withColumn("latitude", occ_df_2020["latitude"].cast(DoubleType())).withColumn(
-            "longitude", occ_df_2020["longitude"].cast(DoubleType())
+        station_id_df = station_id_df.withColumn("latitude", station_id_df["latitude"].cast(DoubleType())).withColumn(
+            "longitude", station_id_df["longitude"].cast(DoubleType())
         )
 
-        occ_df_2020 = occ_df_2020.drop("location")
+        station_id_df = station_id_df.drop("location")
 
         # get the distinct Station_Id, Longitude and Latitude
-        station_id_lookup = occ_df_2020.select("station_Id", "longitude", "latitude").distinct()
+        station_id_lookup = station_id_df.select("station_Id", "longitude", "latitude").distinct()
 
         station_id_lookup.persist()
 
         # Broadcast the smaller dataframe as it contains few 1000 rows
         F.broadcast(station_id_lookup)
+
+        station_id_lookup.show(2)
 
         return station_id_lookup
 
@@ -138,6 +140,7 @@ class OccupancyProcessing:
     ):
 
         PartitionColumn = partn_col
+        gen_logs = GenerateLogs(self.spark)
 
         ReturnCode = 0
         rec_cnt = 0
@@ -155,29 +158,36 @@ class OccupancyProcessing:
                 Success = False
                 RetryCt += 1
                 if RetryCt == max_retry_count:
-                    GenerateLogs.log_info(
+                    gen_logs.log_info(
                         SCRIPT_NAME, "Failed on reading input file after {} tries: {}".format(max_retry_count)
                     )
                     ReturnCode = 1
                     return ReturnCode, rec_cnt
 
                 else:
-                    GenerateLogs.log_info(
+                    gen_logs.log_info(
                         SCRIPT_NAME, "Failed on reading input file, re-try in {} seconds ".format(retry_delay)
                     )
 
-        select_df = input_df.select([colname for colname in input_df.columns if colname in (cols_list)])
+        select_df = input_df.select([colname for colname in input_df.columns])
+        # if colname in (cols_list)])
+
+        select_df = select_df.withColumn("station_id", F.col("sourceelementkey"))
+        select_df = select_df.drop("sourceelementkey")
 
         print("Reading inside transformation function")
         select_df.show(5)
 
-        for column in cols_list:
-            if column == "station_id":
-                print("Reading inside column transformations of {}".format(column))
+        for x in range(len(cols_list)):
+            if cols_list[x] == "station_id":
+                column = cols_list[x]
+
                 select_df = select_df.withColumn(column, self.remove_non_word_characters(F.col("station_id")))
                 select_df = select_df.withColumn(column, select_df[column].cast(IntegerType()))
 
-            elif column == "occupancydatetime":
+            if cols_list[x] == "occupancydatetime":
+                column = cols_list[x]
+
                 self.spark.sql("set spark.sql.legacy.timeParserPolicy=LEGACY")
                 select_df = select_df.withColumn(column, self.timestamp_format(F.col(column), "MM/dd/yyyy hh:mm:ss a"))
 
@@ -191,7 +201,9 @@ class OccupancyProcessing:
 
                 select_df = select_df.withColumn(PartitionColumn, self.date__format(F.col(column), "MMMM"))
 
-            elif column == "location":
+            if cols_list[x] == "location":
+
+                column = cols_list[x]
                 split_col = ["longitude", "latitude"]
 
                 select_df = select_df.withColumn(split_col[0], F.split(column, " ").getItem(1)).withColumn(
@@ -199,7 +211,7 @@ class OccupancyProcessing:
                 )
 
                 select_df = select_df.withColumn(split_col[0], self.remove__parenthesis(col(split_col[0]))).withColumn(
-                    split_col[1], remove__parenthesis(col(split_col[1]))
+                    split_col[1], self.remove__parenthesis(col(split_col[1]))
                 )
 
                 select_df = select_df.withColumn(split_col[0], select_df[split_col[0]].cast(DoubleType())).withColumn(
@@ -211,55 +223,59 @@ class OccupancyProcessing:
             #   select_df = select_df.select(cols_list)
             # select_df = select_df.select([colname for colname in input_df.columns if colname in (cols_list)])
 
-            RetryCt = 0
-            Success = False
+        RetryCt = 0
+        Success = False
 
-            while (RetryCt < max_retry_count) and not Success:
-                try:
-                    Success = True
-                    select_df.show(3)
-                    GenerateLogs.log_print("Writing occupancy dataframe to output file: {}".format(output))
+        while (RetryCt < max_retry_count) and not Success:
+            try:
+                Success = True
+                select_df.show(3)
+                gen_logs.log_print("Writing occupancy dataframe to output file: {}".format(output))
 
-                    select_df.write.mode("append").partitionBy(PartitionColumn).parquet(output)
+                select_df.write.mode("append").partitionBy(PartitionColumn).parquet(output)
 
-                    GenerateLogs.log_print("Writing date dimension to output file: {}".format(datedimoutputpath))
-                    date_dim.show(3)
-                    date_dim.write.mode("append").partitionBy(PartitionColumn).parquet(datedimoutputpath)
-                except:
-                    Success = False
-                    RetryCt += 1
-                    if RetryCt == max_retry_count:
-                        GenerateLogs.log_info(
-                            SCRIPT_NAME,
-                            "Failed on writing to Output after {} tries: {} ".format(max_retry_count, output),
-                        )
-                        ReturnCode = 2
-                        return ReturnCode, rec_cnt
-                    else:
-                        GenerateLogs.log_info(
-                            SCRIPT_NAME, "Failed on writing to Output, re-try in {} seconds ".format(retry_delay)
-                        )
-                        time.sleep(retry_delay)
+                gen_logs.log_print("Writing date dimension to output file: {}".format(datedimoutputpath))
+                date_dim.show(3)
+                # date_dim.write.mode("append").partitionBy(PartitionColumn).parquet(datedimoutputpath)
+            except:
+                Success = False
+                RetryCt += 1
+                if RetryCt == max_retry_count:
+                    gen_logs.log_info(
+                        SCRIPT_NAME,
+                        "Failed on writing to Output after {} tries: {} ".format(max_retry_count, output),
+                    )
+                    ReturnCode = 2
+                    return ReturnCode, rec_cnt
+                else:
+                    gen_logs.log_info(
+                        SCRIPT_NAME, "Failed on writing to Output, re-try in {} seconds ".format(retry_delay)
+                    )
+                    time.sleep(retry_delay)
 
-            GenerateLogs.log_print("Number of Records Processed: {}".format(rec_cnt))
-            return ReturnCode, rec_cnt
+        gen_logs.log_print("Number of Records Processed: {}".format(rec_cnt))
+        return ReturnCode, rec_cnt
 
     """ Function to transform historic paid parking datasets from 2012-2017 """
 
     def executeHistoricOccupancyOperations(
-        self, src_df, output, cols_list, partn_col, max_retry_count, retry_delay, custom_schema
+        self, src_df, output, path_of_year_tob_processed, partn_col, max_retry_count, retry_delay, custom_schema
     ):
+        gen_logs = GenerateLogs(self.spark)
 
         PartitionColumn = partn_col
-        station_id_lookup = createStationIDDF(custom_schema)
+        station_id_lookup = self.createStationIDDF(path_of_year_tob_processed, custom_schema)
+
+        src_df = src_df.withColumn("station_id", F.col("sourceelementkey"))
+        src_df = src_df.drop("sourceelementkey")
 
         occ_df = src_df.join(station_id_lookup, ["station_id"], how="left_outer").select(
-            src_df.OccupancyDateTime,
-            src_df.Station_Id,
-            src_df.Occupied_Spots,
-            src_df.Available_Spots,
-            station_id_lookup.Longitude,
-            station_id_lookup.Latitude,
+            src_df.occupancydatetime,
+            src_df.station_id,
+            src_df.paidoccupancy,
+            src_df.available_spots,
+            station_id_lookup.longitude,
+            station_id_lookup.latitude,
         )
 
         self.spark.sql("set spark.sql.legacy.timeParserPolicy=LEGACY")
@@ -283,30 +299,31 @@ class OccupancyProcessing:
                 Success = False
                 RetryCt += 1
                 if RetryCt == max_retry_count:
-                    GenerateLogs.log_info(
+                    gen_logs.log_info(
                         SCRIPT_NAME, "Failed on writing to Output after {} tries: {} ".format(max_retry_count, output)
                     )
                     ReturnCode = 2
                     return ReturnCode, rec_cnt
                 else:
-                    GenerateLogs.log_info(
+                    gen_logs.log_info(
                         SCRIPT_NAME, "Failed on writing to Output, re-try in {} seconds ".format(retry_delay)
                     )
                     time.sleep(retry_delay)
 
-        GenerateLogs.log_print("Number of Records Processed: {}".format(rec_cnt))
+        gen_logs.log_print("Number of Records Processed: {}".format(rec_cnt))
         return ReturnCode, rec_cnt
 
-    def main():
+    def main(self):
 
         #    logger = spark._jvm.org.apache.log4j
         #   logger.LogManager.getLogger("org").setLevel(logger.Level.ERROR)
         #  logger.LogManager.getLogger("akka").setLevel(logger.Level.ERROR)
 
-        executeOccupancyOperations(src_df, output, cols_list, cols_dict, partn_col, max_retry_count, retry_delay)
+        self.executeOccupancyOperations(src_df, output, cols_list, cols_dict, partn_col, max_retry_count, retry_delay)
 
 
 if __name__ == "__main__":
     log_file = "test.log"
-    GenerateLogs.initial_log_file(logfile)
-    main()
+    #  gen_logs = GenerateLogs(self.spark)
+    #  GenerateLogs.initial_log_file(logfile)
+    OccupancyProcessing.main()

@@ -6,23 +6,23 @@ from pandas import Series, DataFrame
 
 class GenerateLogs:
     """
-    This custom class generates execution logs in a specific format and saves to a dataframe. This is useful in tracking and troubleshooting
-
-
+    This custom class generates execution logs in a specific format and saves to a dataframe. 
+    This is useful in tracking and troubleshooting
+    
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, spark):
+        self.spark = spark
 
-    def global_SQLContext(spark1):
+    def global_SQLContext(self, spark1):
         global spark
-        spark = spark1
+        self.spark = spark1
 
-    def rename_log_filename(logfile):
+    def rename_log_filename(self, logfile):
         os.rename(log_filename, logfile)
         log_filename = logfile
 
-    def log_print(log_message):
+    def log_print(self, log_message):
         current_time = datetime.now()
         str_current_time = current_time.strftime("%d %b %Y %H:%M:%S.%f")
         time_index = current_time.strftime("%d%H%M%S%f")
@@ -37,15 +37,14 @@ class GenerateLogs:
         message_dict = {"Message": message_list, "TimeIndex": time_index}
 
         df = pd.DataFrame(message_dict, columns=["Message", "TimeIndex"])
-        df = spark.createDataFrame(df)
+        df = self.spark.createDataFrame(df)
 
         df.coalesce(1).write.mode("append").format("text").partitionBy("TimeIndex").save(log_filename)
 
-    def initial_log_file(logfile):
+    def initial_log_file(self, logfile):
         global log_filename, g_main_script
         # Get current system timestamp
         log_filename = logfile
-        from dataset_processing.utilities.miscProcess import GenerateLogs
 
         current_time = datetime.now()
         str_current_time = current_time.strftime("%d %b %Y %H:%M:%S.%f")
@@ -57,7 +56,7 @@ class GenerateLogs:
         parse = sys.argv[0].split("/")
         g_main_script = parse[-1]
 
-        GenerateLogs.log_print("Log filename: {}".format(log_filename))
+        self.log_print("Log filename: {}".format(log_filename))
 
         message_list.append(
             "============================================================================================"
@@ -73,10 +72,10 @@ class GenerateLogs:
 
         message_dict = {"Message": message_list, "TimeIndex": time_index}
         df = pd.DataFrame(message_dict, columns=["Message", "TimeIndex"])
-        df = spark.createDataFrame(df)
+        df = self.spark.createDataFrame(df)
         df.coalesce(1).write.mode("overwrite").format("text").partitionBy("TimeIndex").save(log_filename)
 
-    def complete_log_file():
+    def complete_log_file(self):
         current_time = datetime.now()
         str_current_time = current_time.strftime("%d %b %Y %H:%M:%S.%f")
         time_index = current_time.strftime("%d%H%M%S%f")
@@ -97,11 +96,11 @@ class GenerateLogs:
 
         message_dict = {"Message": message_list, "TimeIndex": time_index}
         df = pd.DataFrame(message_dict, columns=["Message", "TimeIndex"])
-        df = spark.createDataFrame(df)
+        df = self.spark.createDataFrame(df)
 
         df.coalesce(1).write.mode("append").format("text").partitionBy("TimeIndex").save(log_filename)
 
-    def log_info(caller_script, log_message="Process Completed Successfully"):
+    def log_info(self, caller_script, log_message="Process Completed Successfully"):
         current_time = datetime.now()
         str_current_time = current_time.strftime("%d %b %Y %H:%M:%S.%f")
         time_index = current_time.strftime("%d%H%M%S%f")
@@ -118,11 +117,11 @@ class GenerateLogs:
         message_dict = {"Message": message_list, "TimeIndex": time_index}
 
         df = pd.DataFrame(message_dict, columns=["Message", "TimeIndex"])
-        df = spark.createDataFrame(df)
+        df = self.spark.createDataFrame(df)
 
         df.coalesce(1).write.mode("append").format("text").partitionBy("TimeIndex").save(log_filename)
 
-    def log_error(caller_script, log_message="Script Completed Successfully", return_code=123):
+    def log_error(self, caller_script, log_message="Script Completed Successfully", return_code=123):
         current_time = datetime.now()
         str_current_time = current_time.strftime("%d %b %Y %H:%M:%S.%f")
         time_index = current_time.strftime("%d%H%M%S%f")
@@ -169,13 +168,13 @@ class GenerateLogs:
         message_dict = {"Message": message_list, "TimeIndex": time_index}
 
         df = pd.DataFrame(message_dict, columns=["Message", "TimeIndex"])
-        df = spark.createDataFrame(df)
+        df = self.spark.createDataFrame(df)
 
         df.coalesce(1).write.mode("append").format("text").partitionBy("TimeIndex").save(log_filename)
 
         return return_code
 
-    def log_step(caller_script, log_message="Script Completed Successfully"):
+    def log_step(self, caller_script, log_message="Script Completed Successfully"):
         current_time = datetime.now()
         str_current_time = current_time.strftime("%d %b %Y %H:%M:%S.%f")
         time_index = current_time.strftime("%d%H%M%S%f")
@@ -215,10 +214,10 @@ class GenerateLogs:
         message_dict = {"Message": message_list, "TimeIndex": time_index}
 
         df = pd.DataFrame(message_dict, columns=["Message", "TimeIndex"])
-        df = spark.createDataFrame(df)
+        df = self.spark.createDataFrame(df)
 
         df.coalesce(1).write.mode("append").format("text").partitionBy("TimeIndex").save(log_filename)
 
 
 if __name__ == "__main__":
-    log_error(sys.argv[0], sys.argv[1], sys.argv[2])
+    GenerateLogs.log_error(sys.argv[0], sys.argv[1], sys.argv[2])

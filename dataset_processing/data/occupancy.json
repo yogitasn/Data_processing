@@ -15,7 +15,7 @@
             },
             {
               "metadata": {},
-              "name": "occupied_spots",
+              "name": "paidoccupancy",
               "nullable": true,
               "type": "IntegerType()"
             },
@@ -33,7 +33,7 @@
             },
             {
               "metadata": {},
-              "name": "station_id",
+              "name": "sourceelementkey",
               "nullable": true,
               "type": "StringType()"
             },
@@ -80,6 +80,74 @@
                 "type": "StringType()"
               }
 
+          ],
+          "historic_fields": [
+            {
+              "metadata": {},
+              "name": "occupancydatetime",
+              "nullable": true,
+              "type": "StringType()"
+            },
+            {
+              "metadata": {},
+              "name": "paidoccupancy",
+              "nullable": true,
+              "type": "IntegerType()"
+            },
+            {
+              "metadata": {},
+              "name": "blockfacename",
+              "nullable": true,
+              "type": "StringType()"
+            },
+            {
+              "metadata": {},
+              "name": "sideofstreet",
+              "nullable": true,
+              "type": "StringType()"
+            },
+            {
+              "metadata": {},
+              "name": "sourceelementkey",
+              "nullable": true,
+              "type": "StringType()"
+            },
+            {
+                "metadata": {},
+                "name": "pakingtimelimitcategory",
+                "nullable": true,
+                "type": "IntegerType()"
+              },
+              {
+                "metadata": {},
+                "name": "available_spots",
+                "nullable": true,
+                "type": "IntegerType()"
+              },
+              {
+                "metadata": {},
+                "name": "paidparkingarea",
+                "nullable": true,
+                "type": "StringType()"
+              },
+              {
+                "metadata": {},
+                "name": "paidparkingsubarea",
+                "nullable": true,
+                "type": "StringType()"
+              },
+              {
+                "metadata": {},
+                "name": "paidparkingrate",
+                "nullable": true,
+                "type": "DoubleType()"
+              },
+              {
+                "metadata": {},
+                "name": "parkingcategory",
+                "nullable": true,
+                "type": "StringType()"
+              }
           ]
         }
       },
@@ -97,7 +165,7 @@
             "columnDescription": "Occupancy Date time",
             "columnDataType": "String"
           },{
-            "columnName":"occupied_spots",
+            "columnName":"paidoccupancy",
             "columnBusinessName":"Occupied Spots",
             "columnDescription": "Occupied Spots",
             "columnDataType": "Integer"
@@ -115,9 +183,9 @@
             "columnDataType": "STRING"
           },
           {
-            "columnName":"station_id",
-            "columnBusinessName":"Parking Category",
-            "columnDescription": "Parking Category",
+            "columnName":"sourceelementkey",
+            "columnBusinessName":"Unique Station ID",
+            "columnDescription": "Unique Station ID",
             "columnDataType": "STRING"
           },
           {
